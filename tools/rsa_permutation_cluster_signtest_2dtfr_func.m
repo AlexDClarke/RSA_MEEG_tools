@@ -1,6 +1,6 @@
-function [clust_stats, clust_mass_perm, base_tmap] = rsa_permutation_cluster_test_2dtfr_func(data1,data2,fpmin,fpmax,tpmin,tpmax,perm_num,test,pval,rand_perms)
+function [clust_stats, clust_mass_perm, base_zmap] = rsa_permutation_cluster_signtest_2dtfr_func(data1,data2,fpmin,fpmax,tpmin,tpmax,perm_num,test,pval,rand_perms)
 
-%%% Cluster based permutation t-test between conditions of 2D TF data
+%%% Cluster based permutation sign-rank test between conditions of 2D TF data
 %
 % Inputs:
 %       data1 = condition 1 data (subjects x freqs x timepoint)
@@ -39,21 +39,36 @@ data_1_rel = data1(:,fpmin:fpmax,tpmin:tpmax);
 data_2_rel = data2(:,fpmin:fpmax,tpmin:tpmax);
 
 % Calculate t-statistic map
-base_tmap = squeeze(mean(data_1_rel-data_2_rel)./(std(data_1_rel-data_2_rel)/sqrt(size(data_1_rel,1))));
-
+%base_tmap = squeeze(mean(data_1_rel-data_2_rel)./(std(data_1_rel-data_2_rel)/sqrt(size(data_1_rel,1))));
+for f = 1:size(data_1_rel,2)
+    for t =  1:size(data_1_rel,3)
+        d1 = data_1_rel(:,f,t);
+        d2 = data_2_rel(:,f,t);
+        [p,h,stats] = signrank(d1,d2,'tail','right','method','approximate');        
+        base_zmap(t,f) = stats.zval;        
+    end
+end
 
 % Find cluser sizes for sig clusters (positive only)
-[~, clust_pos_data] = find_max_clust_mass(base_tmap,abs(tinv(pval,(size(data_1_rel,1)-1))));
+%[~, clust_pos_data] = find_max_clust_mass(base_tmap,abs(tinv(pval,(size(data_1_rel,1)-1))));
+[~, clust_pos_data] = find_max_clust_mass(base_zmap,abs(norminv(pval)));
 
 % Permute data
 if test
     for i = 1:perm_num
 % For one-sample test (flip signs not re-label conditions)
         perm_rand = rand_perms(:,i);
-        data_1_temp = [data_1_rel(find(perm_rand==1),:,:);-1*(data_1_rel(find(perm_rand==0),:,:))];
-        perm_tmap = squeeze(mean(data_1_temp)./(std(data_1_temp)/sqrt(size(data_1_rel,1))));
-
-        clust_mass_pos = find_max_clust_mass(perm_tmap,abs(tinv(pval,(size(data_1_rel,1)-1))));
+        data_1_temp = [data_1_rel(find(perm_rand==1),:,:);-1*(data_1_rel(find(perm_rand==0),:,:))];        
+        for f = 1:size(data_1_rel,2)
+            for t =  1:size(data_1_rel,3)
+                d1 = data_1_temp(:,f,t);                
+                [p,h,stats] = signrank(d1,0,'tail','right','method','approximate');
+                perm_zmap(t,f) = stats.zval;
+            end
+        end        
+%       perm_tmap = squeeze(mean(data_1_temp)./(std(data_1_temp)/sqrt(size(data_1_rel,1))));
+%       clust_mass_pos = find_max_clust_mass(perm_tmap,abs(tinv(pval,(size(data_1_rel,1)-1))));
+        clust_mass_pos = find_max_clust_mass(perm_zmap,abs(norminv(pval)));
         clust_mass_neg=0;
         clust_mass_perm(i) = max(clust_mass_neg,clust_mass_pos);
     end
@@ -64,9 +79,17 @@ else
 %       perm_rand = round(rand(size(data_1_rel,1),1));
         data_1_temp = [data_1_rel(find(perm_rand==1),:,:);data_2_rel(find(perm_rand==0),:,:)];
         data_2_temp = [data_2_rel(find(perm_rand==1),:,:);data_1_rel(find(perm_rand==0),:,:)];
-        perm_tmap=squeeze(mean(data_1_temp-data_2_temp)./(std(data_1_temp-data_2_temp)/sqrt(size(data_1_rel,1))));
-
-        clust_mass_pos = find_max_clust_mass(perm_tmap,abs(tinv(pval,(size(data_1_rel,1)-1))));       
+        for f = 1:size(data_1_rel,2)
+            for t =  1:size(data_1_rel,3)
+                d1 = data_1_temp(:,f,t);
+                d2 = data_2_temp(:,f,t);
+                [p,h,stats] = signrank(d1,d2,'tail','right','method','approximate');
+                perm_zmap(t,f) = stats.zval;
+            end
+        end        
+%       perm_tmap=squeeze(mean(data_1_temp-data_2_temp)./(std(data_1_temp-data_2_temp)/sqrt(size(data_1_rel,1))));
+%       clust_mass_pos = find_max_clust_mass(perm_tmap,abs(tinv(pval,(size(data_1_rel,1)-1))));       
+        clust_mass_pos = find_max_clust_mass(perm_zmap,abs(norminv(pval)));       
         clust_mass_neg=0;
         clust_mass_perm(i) = max(clust_mass_neg,clust_mass_pos);
     end

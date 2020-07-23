@@ -1,4 +1,4 @@
-function roiRSA_permstats(option,rs)
+function roiRSA_permstats_signrank(option)
 
 % Generates permutation based cluster stats for the RSA timecourses
 %
@@ -9,7 +9,6 @@ max_perm_hist = [];
 clusters = [];
 alpha = option.alpha;
 cd(option.rfxdir);
-rng = rs;
 rand_perms = round(rand(length(option.subs)-length(option.sub_out),option.perms));
 
 load([option.var_dir option.models '.mat']);  % Models
@@ -46,11 +45,11 @@ for mask = 1:length(option.masknic)
         a = zeros(size(r)); clear x i
         
         % Test
-        [clust_stat_p, clust_mass_p, base_tmap] = rsa_permutation_cluster_test_2dtfr_func(r,a,1,1,epoch(1),epoch(2),option.perms,1,alpha,rand_perms);
+        [clust_stat_p, clust_mass_p, base_zmap] = rsa_permutation_cluster_signtest_2dtfr_func(r,a,1,1,epoch(1),epoch(2),option.perms,1,alpha,rand_perms);
         
         % work out start/stop of clusters
-        start = nonzeros([1; diff(find(base_tmap>abs(tinv(alpha,(size(r,1)-1)))))>1] .* find(base_tmap>abs(tinv(alpha,(size(r,1)-1)))));
-        stop = nonzeros([diff(find(base_tmap>abs(tinv(alpha,(size(r,1)-1)))))>1; 1] .* find(base_tmap>abs(tinv(alpha,(size(r,1)-1)))));
+        start = nonzeros([1; diff(find(base_zmap>abs(norminv(alpha))))>1] .* find(base_zmap>abs(norminv(alpha))));
+        stop = nonzeros([diff(find(base_zmap>abs(norminv(alpha))))>1; 1] .* find(base_zmap>abs(norminv(alpha))));
         if isempty(start)
             start = 0; stop = 0;
         else
@@ -80,15 +79,12 @@ for mask = 1:length(option.masknic)
     end % mod
 end % roi
 
-if ~isempty(clusters)
 max_perm_hist2 = max(max_perm_hist);
 for c = 1:length(clusters(:,1))
     max_p_val{c} = length(find(max_perm_hist2 > clusters{c,4}))/length(max_perm_hist2(1,:));
 end
+
 ROI_corrected_stats = [clusters, max_p_val'];
-else
-ROI_corrected_stats = [clusters];
-end
 outname = [option.rfxdir 'RSA_timecourse_perm_stats_p' num2str(alpha) '.mat'];
 save(outname,'ROI_corrected_stats','option','max_perm_hist');
 
@@ -135,7 +131,7 @@ for mask = 1:length(option.masknic)
     epoch = [find(option.tfepoch == option.stats_epoch(1)) find(option.tfepoch == option.stats_epoch(2))];
     if isempty(epoch)  % use approximate
     epoch = [min(find((option.tfepoch>option.stats_epoch(1))))-1 ...
-       min(find((option.tfepoch>option.stats_epoch(2))))];
+       max(find((option.tfepoch>option.stats_epoch(1))))];
     end
     
     for modl = 1:nmods
@@ -153,11 +149,11 @@ for mask = 1:length(option.masknic)
         for bands = 1:length(freqs(1,:)) 
         
         % Test
-        [clust_stat_p, clust_mass_p, base_tmap] = rsa_permutation_cluster_test_2dtfr_func(r,a,bands,bands,epoch(1),epoch(2),option.perms,1,alpha,rand_perms);
+        [clust_stat_p, clust_mass_p, base_zmap] = rsa_permutation_cluster_signtest_2dtfr_func(r,a,bands,bands,epoch(1),epoch(2),option.perms,1,alpha,rand_perms);
         
         % work out start/stop of clusters
-        start = nonzeros([1; diff(find(base_tmap>abs(tinv(alpha,(size(r,1)-1)))))>1] .* find(base_tmap>abs(tinv(alpha,(size(r,1)-1)))));
-        stop = nonzeros([diff(find(base_tmap>abs(tinv(alpha,(size(r,1)-1)))))>1; 1] .* find(base_tmap>abs(tinv(alpha,(size(r,1)-1)))));
+        start = nonzeros([1; diff(find(base_zmap>abs(norminv(alpha))))>1] .* find(base_zmap>abs(norminv(alpha))));
+        stop = nonzeros([diff(find(base_zmap>abs(norminv(alpha))))>1; 1] .* find(base_zmap>abs(norminv(alpha))));
         if isempty(start)
             start = 0; stop = 0;
         else
@@ -245,7 +241,7 @@ for mask = 1:length(option.masknic)
     epoch = [find(option.tfepoch == option.stats_epoch(1)) find(option.tfepoch == option.stats_epoch(2))];
     if isempty(epoch)  % use approximate
     epoch = [min(find((option.tfepoch>option.stats_epoch(1))))-1 ...
-       min(find((option.tfepoch>option.stats_epoch(2))))];
+       max(find((option.tfepoch>option.stats_epoch(1))))];
     end
     times = option.tfepoch(epoch(1):epoch(2));
     
@@ -258,7 +254,7 @@ for mask = 1:length(option.masknic)
         a = zeros(size(r));                
         
         % Test
-        [clust_stat_p, clust_mass_p, base_tmap] = rsa_permutation_cluster_test_2dtfr_func(r,a,1,size(r,2),epoch(1),epoch(2),option.perms,1,alpha,rand_perms);        
+        [clust_stat_p, clust_mass_p, base_zmap] = rsa_permutation_cluster_signtest_2dtfr_func(r,a,1,size(r,2),epoch(1),epoch(2),option.perms,1,alpha,rand_perms);        
         clust_stat_p(find(clust_stat_p(:,1) == 0),:) = []; % get rid of clusters that are sized zero
         
         % Get time and freq bounds of clusters
@@ -268,7 +264,7 @@ for mask = 1:length(option.masknic)
 %        clusters_matrix_n(find(clusters_matrix_n)) = clusters_matrix_n(find(clusters_matrix_n))+max(max(clusters_matrix_p));  % adjust neg labels
 %        clusters_matrix = clusters_matrix_p + clusters_matrix_n;
         
-        clusters_matrix = bwlabel(base_tmap>abs(tinv(alpha,(size(r,1)-1))));
+        clusters_matrix = bwlabel(base_zmap>abs(norminv(alpha)));
         
         if sum(clusters_matrix(:)) == 0; %isempty(clusters_matrix)
             Fstart = 0;

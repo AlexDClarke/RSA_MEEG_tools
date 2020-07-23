@@ -1,3 +1,3 @@
-function parsave(fname,tmpout)
-save(fname,'tmpout');
+function parsave(fname,tmpout,option)
+save(fname,'tmpout','option');
 end

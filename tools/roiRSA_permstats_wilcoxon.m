@@ -1,4 +1,4 @@
-function roiRSA_permstats(option,rs)
+function roiRSA_permstats_wilcoxon(option,rs)
 
 % Generates permutation based cluster stats for the RSA timecourses
 %
@@ -46,11 +46,12 @@ for mask = 1:length(option.masknic)
         a = zeros(size(r)); clear x i
         
         % Test
-        [clust_stat_p, clust_mass_p, base_tmap] = rsa_permutation_cluster_test_2dtfr_func(r,a,1,1,epoch(1),epoch(2),option.perms,1,alpha,rand_perms);
+        [clust_stat_p, clust_mass_p, base_tmap] = rsa_permutation_cluster_test_2dtfr_func_signrank(r,a,1,1,epoch(1),epoch(2),option.perms,1,alpha,rand_perms);        
+%       [clust_stat_p, clust_mass_p, base_tmap] = rsa_permutation_cluster_test_2dtfr_func(r,a,1,1,epoch(1),epoch(2),option.perms,1,alpha,rand_perms);        
         
         % work out start/stop of clusters
-        start = nonzeros([1; diff(find(base_tmap>abs(tinv(alpha,(size(r,1)-1)))))>1] .* find(base_tmap>abs(tinv(alpha,(size(r,1)-1)))));
-        stop = nonzeros([diff(find(base_tmap>abs(tinv(alpha,(size(r,1)-1)))))>1; 1] .* find(base_tmap>abs(tinv(alpha,(size(r,1)-1)))));
+        start = nonzeros([1, diff(find(base_tmap>abs(norminv(alpha))))>1] .* find(base_tmap>abs(norminv(alpha))));
+        stop = nonzeros([diff(find(base_tmap>abs(norminv(alpha))))>1, 1] .* find(base_tmap>abs(norminv(alpha))));
         if isempty(start)
             start = 0; stop = 0;
         else

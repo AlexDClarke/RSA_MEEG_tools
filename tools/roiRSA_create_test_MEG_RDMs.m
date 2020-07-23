@@ -1,12 +1,12 @@
 function roiRSA_create_test_MEG_RDMs(option,trials,s)
 
-% Creates MEG-based ROI RDMs from MEG source localised ROI data
+% Creates ROI RDMs from extracted time-series data
 %
-% Alex (10/2014) Feb 2015
+% Alex (2014) Feb 2015, Feb 2018
 
-%warning off
+warning off
 
-matlabpool(5);
+%matlabpool(5);
 
 %% Begin
 % Set empty output matrix
@@ -18,26 +18,16 @@ nmods = size(mod_names,1);
 parfor sub = 1:length(optionz.subs)
     option = optionz;
     
-    if option.doTFbands
-        %   start = (1000/min(option.fsc))*(round(option.cycles/2));
-        tmpout = zeros(length(option.masknic),nmods,size(option.fs,2),(option.epoch_length)/option.tfstep+1);
-    elseif option.doTF
-        %   start = (1000/min(option.fsc))*(round(option.cycles/2));
-        tmpout = zeros(length(option.masknic),nmods,option.nfs,(option.epoch_length)/option.tfstep+1);
-    else
-        tmpout = zeros(length(option.masknic),nmods,option.epoch_length/option.srate+1);
-    end
-    Models = [];
+    cd([option.datadir option.sub_beg option.subs{sub} option.subdir]);    
     
-    % Load list of trials to reject
-    reject = load([option.datadir option.sub_beg option.subs{sub} option.subdir option.trials option.subs{sub} '.mat']);
-    
-    cd([option.datadir option.sub_beg option.subs{sub} option.subdir]);
-    
-    for mask = 1:length(option.masknic)
-        
-        sprintf('......Subject %s, Region %s......', option.subs{sub},num2str(mask))
-        
+    option = optionz;
+    if option.doTF || option.doTFbands
+        if option.doPhase || option.doPhasePower
+            o = load([option.tf_pre 'phz_' option.masknic{1} option.midname option.front option.subs{sub} '.mat'],'option');
+        else
+            o = load([option.tf_pre option.masknic{1} option.midname option.front option.subs{sub} '.mat'],'option');
+        end  
+        option = o.option;
         % Need for files extracted with tw as one value, and now want to
         % use another without re-extracting
         options = optionsfile(s,1);
@@ -49,6 +39,25 @@ parfor sub = 1:length(optionz.subs)
         option = setfield(option,'fs',options.fs);
         option = setfield(option,'tw',options.tw);
         option = setfield(option,'doavg',options.doavg); options = [];
+                
+    end 
+    if option.doTFbands           
+        %   start = (1000/min(option.fsc))*(round(option.cycles/2));
+        tmpout = zeros(length(option.masknic),nmods,size(option.fs,2),(option.epoch_length)/option.tfstep+1);
+    elseif option.doTF
+        %   start = (1000/min(option.fsc))*(round(option.cycles/2));
+        tmpout = zeros(length(option.masknic),nmods,option.nfs,(option.epoch_length)/option.tfstep+1);
+    else
+        tmpout = zeros(length(option.masknic),nmods,option.epoch_length/option.srate+1);
+    end
+%   Models = [];
+    
+    % Load list of trials to reject
+    reject = load([option.datadir option.sub_beg option.subs{sub} option.subdir option.trials option.subs{sub} '.mat']);
+    
+    for mask = 1:length(option.masknic)
+        
+        sprintf('......Subject %s, Region %s......', option.subs{sub},num2str(mask))                
         
         %% Setup matfile for outputs
         if option.doTF && option.doTFbands==0
@@ -199,10 +208,12 @@ parfor sub = 1:length(optionz.subs)
                             
                             if ~isreal(a) % i.e. power/phase distances
                                 st_rdm = complexdist(squeeze(a(f,:,:)));
+                            elseif option.doPhase % phase distances
+                                [st_rdm] = phasedist(squeeze(a(f,:,:)));
                             else  % normal distances
                                 st_rdm = squareform(pdist(squeeze(a(f,:,:)),option.dist1));
                             end
-                            
+                                                        
                             % set incorrect/rejected as NaNs
                             st_rdm(find(reject.reject(trials)),:) = NaN;
                             st_rdm(:,find(reject.reject(trials))) = NaN;
@@ -222,9 +233,11 @@ parfor sub = 1:length(optionz.subs)
                         
                         % RDMs for each freq
                         for f = 1:af
-                            
-                            if ~isreal(ao) % i.e. power/phase distances
+                                                       
+                            if ~isreal(a) % i.e. power/phase distances
                                 st_rdm = complexdist(squeeze(a(f,:,:)));
+                            elseif option.doPhase % phase distances
+                                [st_rdm] = phasedist(squeeze(a(f,:,:)));
                             else  % normal distances
                                 st_rdm = squareform(pdist(squeeze(a(f,:,:)),option.dist1));
                             end
@@ -325,7 +338,7 @@ parfor sub = 1:length(optionz.subs)
                 end
                 
                 rdms.ROI_RDMs(1:length(ROI_RDMs_TW(:,1,1,1)),1:band,1:length(ROI_RDMs_TW(1,1,:,1)),1:length(ROI_RDMs_TW(1,1,1,:))) = ROI_RDMs_TW(1:length(ROI_RDMs_TW(:,1,1,1)),1:band,1:length(ROI_RDMs_TW(1,1,:,1)),1:length(ROI_RDMs_TW(1,1,1,:)));
-                clear ROI_RDMs_TW
+                ROI_RDMs_TW=[];
             end
             
             %% Do normal
@@ -445,14 +458,16 @@ parfor sub = 1:length(optionz.subs)
             end
         end
         
-    end % ROI
-    parsave('temp.mat',tmpout); tmpout = [];
+    end % ROI    
+    parsave('temp.mat',tmpout,option); tmpout = [];
 end % sub
 
 mod_names = fieldnames(Models);
 option = optionz;
 
 % Compile subject data
+load([option.datadir option.sub_beg option.subs{1} option.subdir 'temp.mat'])
+subtmpout = zeros(length(optionz.subs),size(tmpout,1),size(tmpout,2),size(tmpout,3),size(tmpout,4));
 for sub = 1:length(optionz.subs)
     load([option.datadir option.sub_beg option.subs{sub} option.subdir 'temp.mat'])
     subtmpout(sub,:,:,:,:) = tmpout;
@@ -625,7 +640,8 @@ if or(option.doTF,option.doTFbands)
             % correlate
             sprintf('......model correlations......')
             y=double(x(:,1)); % seperate model and data for memory saving
-            x(:,1) = []; x=double(x);
+            x(:,1) = []; x=double(x);                                                          
+            if strcmp(option.dist,'Kendall_taua'); option.dist = 'Spearman'; end
             tmpr = corr(y,x,'type',option.dist,'rows','pairwise');
             r(m,:,:) = single(reshape(tmpr,length(rdms.ROI_RDMs(1,:,1,1)),length(rdms.ROI_RDMs(:,1,1,1)))); clear tmpr x y
         end
@@ -718,13 +734,38 @@ else
             end
             
             % correlate
-            tmpr = corr(double(x(:,1)),double(x(:,2:end)),'type',option.dist,'rows','pairwise');
-            r(m,:) = single(tmpr); clear tmpr
+            if strcmp(option.dist,'Kendall_taua')
+                for t = 2:size(x,2)
+                    tmpr = rankCorr_Kendall_taua(x(:,1),x(:,t));
+                    r(m,t-1) = single(tmpr);
+                end
+            else
+                tmpr = corr(double(x(:,1)),double(x(:,2:end)),'type',option.dist,'rows','pairwise');
+                r(m,:) = single(tmpr); clear tmpr
+            end
         end
         clear meg_data
     end
 end
 
+function [st_rdm] = phasedist(a)
+% Distances between phase angles, in radians. Computed for trial-pair with
+% distances summed over vertices/time
+
+m = size(a,1);
+st_rdm = single(zeros(1,(m*(m-1)/2)));
+ind=0;
+for ii = 1:size(a,1) % trials
+    for jj = ii:size(a,1) % trials
+        if ii == jj
+            ii=jj;
+        else
+            ind = ind+1;
+            st_rdm(1,ind) = sum(abs(angle(exp(1i*a(ii,:))./exp(1i*a(jj,:)))));
+        end
+    end
+end
+st_rdm = squareform(st_rdm);
 
 function [st_rdm] = complexdist(a)
 % Distances based on complex numbers. In essense, this is the distance

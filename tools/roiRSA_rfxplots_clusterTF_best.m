@@ -1,4 +1,4 @@
-function roiRSA_rfxplots(option,s,resetoption)
+function roiRSA_rfxplots(option,s,resetoption,c)
 
 % Creates timecourse plots for RFX analysis
 % Works for timecourses, TFR, and TF band plots
@@ -21,8 +21,11 @@ for mask = 1:length(option.masknic)
     end
     
     % Load data
-    load([option.rsafront masknam option.midname num2str(option.tw*option.srate) 'ms_sTW.mat'],'rsa_out','option');
-    
+    if option.remtime
+        load(['resid_' option.rsafront masknam option.midname num2str(option.tw*option.srate) 'ms_sTW.mat'],'rsa_out','option');
+    else
+        load([option.rsafront masknam option.midname num2str(option.tw*option.srate) 'ms_sTW.mat'],'rsa_out','option');
+    end
     mod_names = fieldnames(Models);
     nmods = size(mod_names,1);
     
@@ -43,7 +46,7 @@ for mask = 1:length(option.masknic)
         
         % Spearmans plot
         figure;
-        Color = [0 128/255 129/255]; %[1 0 0];
+        Color = [1 0 0];
         hold on
         plot(zeros(1,length(av)),'LineWidth',1,'Color',[0 0 0])
         se = rsa_std(1,:)/sqrt(size(x,1));        
@@ -59,17 +62,16 @@ for mask = 1:length(option.masknic)
 %         ax.YLabel.FontWeight = 'b';
 %         ax.XLim = option.range;        
 %         % Pre-2014b
-        set(h1,'LineWidth',3);        
+        set(h1,'LineWidth',2);        
         set(gca,'XTick',[1:option.jump/option.srate:option.epoch_length/option.srate]);
         set(gca,'XTickLabel',[round(option.start):option.jump:round(option.stop)]);
         set(get(gca,'XLabel'),'String','Time (ms)', 'fontweight','b')
-        ylim(option.ylimits)
+%       ylim(option.ylimits)
         set(get(gca,'YLabel'),'String','Similarity', 'fontweight','b')
-        xlim(option.range)  
-        grid on
+        xlim(option.range)        
         hold off
         set(gcf,'PaperPositionMode','auto')
-        print('-dtiff',[masknam mod_names{modl} '_correlation'],'-r450');
+        print('-dtiff',[masknam mod_names{modl} '_correlation']);
         close
         
         % Stats plot
@@ -137,16 +139,19 @@ for mask = 1:length(option.masknic)
         prenam = [option.tf_pre];
     end
     
-    if option.doPhase || option.doPhasePower % phase
+    if option.doPhase % phase
         prenam = [prenam 'phz_'];    
     end
-        
-    if option.tw == 1
-        load([prenam option.rsafront masknam option.midname num2str(0*option.tfstep) 'ms_sTW.mat'],'rsa_out','option');
-    else
-        load([prenam option.rsafront masknam option.midname num2str(tfw*option.tfstep) 'ms_sTW.mat'],'rsa_out','option');
-    end
     
+    if option.remtime
+        load(['resid_' prenam option.rsafront masknam option.midname num2str(tfw*option.tfstep) 'ms_sTW.mat'],'rsa_out','option');
+    else
+        if option.tw == 1
+            load([prenam option.rsafront masknam option.midname num2str(0*option.tfstep) 'ms_sTW.mat'],'rsa_out','option');
+        else
+            load([prenam option.rsafront masknam option.midname num2str(tfw*option.tfstep) 'ms_sTW.mat'],'rsa_out','option');
+        end
+    end
     mod_names = fieldnames(Models);
     nmods = size(mod_names,1);
         
@@ -154,8 +159,6 @@ for mask = 1:length(option.masknic)
         options = optionsfile(s,1);        
         option = setfield(option,'start',options.start);
         option = setfield(option,'stop',options.stop);
-        option = setfield(option,'bl_ms',options.bl_ms);
-        option = setfield(option,'stats_epoch',options.stats_epoch);
         option = setfield(option,'ylimits',options.ylimits);
         option = setfield(option,'tlimits',options.tlimits);
         option = setfield(option,'jump',options.jump);
@@ -165,8 +168,9 @@ for mask = 1:length(option.masknic)
     
     option.range = [min(find(option.tfepoch > option.bl_ms(1))) min(find(option.tfepoch > option.stats_epoch(2)))];
     
-    for modl = 1:nmods
-        
+    mm=0;
+    for modl = 1:3%1:nmods
+        mm=mm+1;
         % Calculate mean, st, t-stats
         x = rsa_out.(mod_names{modl});
         x(isnan(x)) = 0;
@@ -174,6 +178,7 @@ for mask = 1:length(option.masknic)
         
         [h p ci stats] = ttest(x);  % get t-value timecourse
         av = squeeze(mean(x));
+        outmax(mm,:,:) = av;
         
         % Spearmans plot
         figure;
@@ -192,9 +197,9 @@ for mask = 1:length(option.masknic)
         set(get(gca,'YLabel'),'String','Freq (Hz)', 'fontweight','b')
         xlim(option.range)
         caxis([option.ylimits])
-        colorbar; %colormap jet
+        colorbar; colormap jet
         set(gcf,'PaperPositionMode','auto')
-        print('-dtiff',[prenam masknam mod_names{modl} '_correlation']);
+%       print('-dtiff',[prenam masknam mod_names{modl} '_correlation']);
         close
         
         % Stats plot        
@@ -214,10 +219,10 @@ for mask = 1:length(option.masknic)
         caxis([option.tlimits])
         colorbar; colormap jet
         set(gcf,'PaperPositionMode','auto')
-        print('-dtiff',[prenam masknam mod_names{modl} '_tmap']);
+%       print('-dtiff',[prenam masknam mod_names{modl} '_tmap']);
         close
         
-        % Stats plot 2                
+        % Stats plot 2        
         if option.tails == 2;
             xx = flipdim(or(squeeze(stats.tstat) < (tinv(alpha/2,size(x,1)-1)), ...
             squeeze(stats.tstat) > abs(tinv(alpha/2,size(x,1)-1))),1);           % plots both tails
@@ -225,13 +230,29 @@ for mask = 1:length(option.masknic)
             xx = flipdim(squeeze(stats.tstat) > abs(tinv(alpha,size(x,1)-1)),1);
         end
         
+        % Get cluster to plot
+        figure; imagesc(bwlabel(xx));        
+        display(' ')
+        cluster = input('Cluster number: ');  
+        if cluster == 99
+        xx=zeros(size(xx));
+        else
+        for ct = 1:length(cluster)
+            xc(:,:,ct) = xx.* (bwlabel(xx)==cluster(ct)); % set clsuer number here
+        end
+        xx = nansum(xc,3);
+        end
+        close                                       
+        
+        xxg(mm,:,:) = xx;
+        
         figure;
         imagesc(flipdim(av,1),'AlphaData',0.5);
         hold on
         imagesc(flipdim(av,1),'AlphaData',1*(xx));
         contour(xx,1,'black','LineWidth',2);
+        mark = min(find(abs(option.tfepoch) == min(abs(0-option.tfepoch))));        
         
-        mark = min(find(abs(option.tfepoch) == min(abs(0-option.tfepoch))));                
         set(gca,'XTick',[1:option.jump/option.tfstep:(option.epoch_length-1)/option.tfstep]);
         set(gca,'XTickLabel',[-option.baseline_length:option.jump:(option.epoch_length-option.baseline_length-1)]);
         set(get(gca,'XLabel'),'String','Time (ms)', 'fontweight','b')                       
@@ -240,7 +261,7 @@ for mask = 1:length(option.masknic)
         set(get(gca,'YLabel'),'String','Freq (Hz)', 'fontweight','b')
         xlim(option.range)
         caxis([option.ylimits])
-        colorbar; %colormap jet        
+        colorbar; colormap jet; colormap(c);        
 %         for n=1:size(xx,2)
 %             for m = 1:size(xx,1)
 %                 if(xx(m,n) == 0)
@@ -252,7 +273,7 @@ for mask = 1:length(option.masknic)
         hold off
         
         set(gcf,'PaperPositionMode','auto')
-        print('-dtiff',[prenam masknam mod_names{modl} '_correlation_p' num2str(alpha) '.tif']);
+%       print('-dtiff',[prenam masknam mod_names{modl} '_correlation_p' num2str(alpha) '.tif']);
         close             
         
         % Stats plot 3      
@@ -276,13 +297,47 @@ for mask = 1:length(option.masknic)
         set(get(gca,'YLabel'),'String','Freq (Hz)', 'fontweight','b')
         xlim(option.range)
         caxis([option.tlimits])
-        colorbar; %colormap jet
+        colorbar; colormap jet
         set(gcf,'PaperPositionMode','auto')
-        print('-dtiff',[prenam masknam mod_names{modl} '_tmap_p' num2str(alpha) '.tif']);
+%       print('-dtiff',[prenam masknam mod_names{modl} '_tmap_p' num2str(alpha) '.tif']);
         close      
         
         
     end % modl
+    
+    % Best model
+    outmax2 = zeros(50,101);
+    outmax2(find(max(outmax) == outmax(1,:,:))) = 1;
+    outmax2(find(max(outmax) == outmax(2,:,:))) = 2;
+    outmax2(find(max(outmax) == outmax(3,:,:))) = 3;   
+    outmax = outmax2;
+    
+    % Combined mask
+    xx=zeros(50,101);
+    xx(find(squeeze(sum(xxg,1)))) = 1;
+    
+    % Best plot
+    figure;
+    imagesc(flipdim(outmax,1),'AlphaData',0);
+    hold on
+    imagesc(flipdim(outmax,1),'AlphaData',1*(xx));
+    contour(xx,1,'black','LineWidth',2);
+    mark = min(find(abs(option.tfepoch) == min(abs(0-option.tfepoch))));
+    set(gca,'XTick',[1:option.jump/option.tfstep:(option.epoch_length-1)/option.tfstep]);
+    set(gca,'XTickLabel',[-option.baseline_length:option.jump:(option.epoch_length-option.baseline_length-1)]);
+    set(get(gca,'XLabel'),'String','Time (ms)', 'fontweight','b')
+    set(gca,'YTick',[1:2:size(freqs,2)]);
+    set(gca,'YTickLabel',aa(1:2:size(freqs,2)));
+    set(get(gca,'YLabel'),'String','Freq (Hz)', 'fontweight','b')
+    xlim(option.range)
+    colorbar; colormap jet; colormap(c);
+    line([mark mark],get(gca,'Ylim'),'Color',[0 0 0],'LineWidth',2);
+    hold off    
+    set(gcf,'PaperPositionMode','auto')
+    print('-dtiff',[prenam masknam 'visualbest_correlation_p' num2str(alpha) '.tif']);
+    close
+    
+    clear outmax xxg
     
 end % mask
 end
@@ -319,16 +374,19 @@ for mask = 1:length(option.masknic)
         prenam = [option.tf_pre 'bands_'];
     end
     
-    if option.doPhase || option.doPhasePower % phase
+    if option.doPhase % phase
         prenam = [prenam 'phz_'];    
     end
-        
-    if option.tw == 1
-        load([prenam option.rsafront masknam option.midname num2str(0*option.tfstep) 'ms_sTW.mat'],'rsa_out','option');
-    else
-        load([prenam option.rsafront masknam option.midname num2str(tfw*option.tfstep) 'ms_sTW.mat'],'rsa_out','option');
-    end
     
+    if option.remtime
+        load(['resid_' prenam option.rsafront masknam option.midname num2str(tfw*option.tfstep) 'ms_sTW.mat'],'rsa_out','option');
+    else
+        if option.tw == 1
+            load([prenam option.rsafront masknam option.midname num2str(0*option.tfstep) 'ms_sTW.mat'],'rsa_out','option');
+        else            
+            load([prenam option.rsafront masknam option.midname num2str(tfw*option.tfstep) 'ms_sTW.mat'],'rsa_out','option');
+        end
+    end
     mod_names = fieldnames(Models);
     nmods = size(mod_names,1);
     
@@ -336,8 +394,6 @@ for mask = 1:length(option.masknic)
         options = optionsfile(s,1);        
         option = setfield(option,'start',options.start);
         option = setfield(option,'stop',options.stop);
-        option = setfield(option,'bl_ms',options.bl_ms);
-        option = setfield(option,'stats_epoch',options.stats_epoch);
         option = setfield(option,'ylimits',options.ylimits);
         option = setfield(option,'tlimits',options.tlimits);
         option = setfield(option,'jump',options.jump);
@@ -345,9 +401,7 @@ for mask = 1:length(option.masknic)
         clear options
     end        
     freqs = option.fs;
-    option.range = [min(find(option.tfepoch > option.bl_ms(1))) min(find(option.tfepoch > option.stats_epoch(2)))];    
-
-
+    
     for modl = 1:nmods
         
         % Calculate mean, st, t-stats
@@ -390,8 +444,7 @@ for mask = 1:length(option.masknic)
             set(get(gca,'XLabel'),'String','Time (ms)', 'fontweight','b')            
 %           ylim([option.ylimits])
             set(get(gca,'YLabel'),'String','Spearman rho', 'fontweight','b')
-            xlim(option.range)
-%           xlim([1 length(option.tfepoch)]);
+            xlim([1 length(option.tfepoch)]);
             hold off
         end
 %        set(gcf,'PaperPositionMode','auto')
@@ -430,8 +483,7 @@ for mask = 1:length(option.masknic)
             set(get(gca,'XLabel'),'String','Time (ms)', 'fontweight','b')                             
 %           ylim([option.ylimits])
             set(get(gca,'YLabel'),'String','Tscore', 'fontweight','b')
-            xlim(option.range)
-%           xlim([1 length(option.tfepoch)]);           
+            xlim([1 length(option.tfepoch)]);           
             hold off
         end
 %        set(gca,'PaperPositionMode','auto')
